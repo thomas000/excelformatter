@@ -69,10 +69,16 @@ class RoutePDF(FPDF):
         self.set_font("Helvetica", 'B', font_size)
 
         # Header bakgrunnsfarge
-        if getattr(self, "listetype", "Brødliste") == "Brødliste":
-            self.set_fill_color(245, 222, 179)
+        if self.listetype == "Brødliste":
+            self.set_fill_color(245, 222, 179)  # Lysebrun
+        elif self.listetype == "Fryseliste":
+            self.set_fill_color(173, 216, 230)  # Lyseblå
+        elif self.listetype == "Fryseliste Plukk":
+            self.set_fill_color(173, 216, 230)  # Samme lyseblå som Fryseliste
+        elif self.listetype == "Bamaliste Plukk":
+            self.set_fill_color(186, 255, 201)  # Lysegrønn
         else:
-            self.set_fill_color(173, 216, 230)
+            self.set_fill_color(220, 220, 220)  # Default grå
 
         # Skriv header
         for i, col in enumerate(columns):
@@ -143,13 +149,26 @@ def format_and_sort_excel(file_path):
         return None
 
 def save_to_pdf(grouped_data, output_path, listetype="Brødliste", dato="ukjent dato"):
-    pdf = RoutePDF(listetype=listetype, dato=dato)
-    pdf.set_auto_page_break(auto=True, margin=15)
-    for route, group in grouped_data:
-        pdf.route_title = f"{listetype} til {dato} - Route: {route}"
+    # Sjekk listetype
+    if listetype in ["Brødliste", "Fryseliste"]:
+        grouped = grouped_data
+        pdf = None  # Flytt pdf-objekt inn i loopen hvis du vil ha én PDF per rute, ellers behold utenfor
+        for route, group in grouped:
+            pdf = RoutePDF(listetype=listetype, dato=dato)
+            pdf.set_auto_page_break(auto=True, margin=15)
+            pdf.route_title = f"{listetype} til {dato} - Route: {route}"
+            pdf.add_page()
+            pdf.add_route_table(group)
+            # Skriv til output_path (hvis du vil ha én fil per rute kan du bruke f"{route}_{output_path}")
+        pdf.output(output_path)  # Lag én samlet PDF med alle rutene (hvis du ønsker én PDF, behold denne)
+    else:
+        # Plukk-lister: EN tabell med hele dataen, ikke grupper!
+        pdf = RoutePDF(listetype=listetype, dato=dato)
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.route_title = f"{listetype} til {dato}"
         pdf.add_page()
-        pdf.add_route_table(group)
-    pdf.output(output_path)
+        pdf.add_route_table(grouped_data)
+        pdf.output(output_path)
 
 def save_to_excel(grouped_data, output_path):
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
@@ -198,8 +217,10 @@ def main():
     label_type.pack(side=tk.LEFT)
 
     # Disse vil nå fungere korrekt da de tilhører 'gui' og 'listetype'
-    tk.Radiobutton(frame_type, text="Brødliste", variable=listetype, value="Brødliste").pack(side=tk.LEFT)
-    tk.Radiobutton(frame_type, text="Fryseliste", variable=listetype, value="Fryseliste").pack(side=tk.LEFT)
+    listetyper = ["Brødliste", "Fryseliste", "Fryseliste Plukk", "Bamaliste Plukk"]
+    listetype = tk.StringVar(value=listetyper[0])
+    dropdown = tk.OptionMenu(frame_type, listetype, *listetyper)
+    dropdown.pack(side=tk.LEFT, padx=5)
 
     label_file = tk.Label(gui, text=f"Valgt fil:\n{os.path.basename(file_path)}", fg="blue")
     label_file.pack(pady=(10, 5))
@@ -221,10 +242,16 @@ def main():
         if "Route" not in df_sorted.columns:
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
-        grouped = df_sorted.groupby("Route")
-        print_via_pdf(grouped, listetype.get(), date_part)
+
+        lt = listetype.get()
+        if lt in ["Brødliste", "Fryseliste"]:
+            grouped = df_sorted.groupby("Route")
+            print_via_pdf(grouped, lt, date_part)
+        else:
+            print_via_pdf(df_sorted, lt, date_part)
         messagebox.showinfo("Ferdig", "PDF generert og åpnet for utskrift.")
         gui.destroy()
+
 
 
     def on_pdf():
@@ -237,10 +264,16 @@ def main():
         if "Route" not in df_sorted.columns:
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
-        grouped = df_sorted.groupby("Route")
-        save_to_pdf(grouped, output_path, listetype.get(), date_part)
+
+        lt = listetype.get()
+        if lt in ["Brødliste", "Fryseliste"]:
+            grouped = df_sorted.groupby("Route")
+            save_to_pdf(grouped, output_path, lt, date_part)
+        else:
+            save_to_pdf(df_sorted, output_path, lt, date_part)
         messagebox.showinfo("Ferdig", f"PDF lagret:\n{output_path}")
         gui.destroy()
+
 
 
     def on_excel():
@@ -253,8 +286,14 @@ def main():
         if "Route" not in df_sorted.columns:
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
-        grouped = df_sorted.groupby("Route")
-        save_to_excel(grouped, output_path)
+
+        lt = listetype.get()
+        if lt in ["Brødliste", "Fryseliste"]:
+            grouped = df_sorted.groupby("Route")
+            save_to_excel(grouped, output_path)
+        else:
+            # Plukklister: Lag Excel av hele tabellen
+            df_sorted.to_excel(output_path, index=False)
         messagebox.showinfo("Ferdig", f"Excel lagret:\n{output_path}")
         gui.destroy()
 

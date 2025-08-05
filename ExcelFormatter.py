@@ -10,6 +10,7 @@ import webbrowser
 import re
 import textwrap
 import sys
+from openpyxl.styles import Alignment
 
 def resource_path(relative_path):
     try:
@@ -82,7 +83,8 @@ class RoutePDF(FPDF):
 
         # Skriv header
         for i, col in enumerate(columns):
-            self.cell(col_widths[i], line_height * 2, str(col), border=1, align='L', fill=True)
+            align = 'C' if col == "Quantity" else 'L'
+            self.cell(col_widths[i], line_height * 2, str(col), border=1, align=align, fill=True)
         self.ln()
 
         for _, row in df.iterrows():
@@ -109,7 +111,8 @@ class RoutePDF(FPDF):
             if self.get_y() + row_height > self.page_break_trigger:
                 self.add_page()
                 for i, col in enumerate(columns):
-                    self.cell(col_widths[i], line_height * 2, str(col), border=1, align='L', fill=True)
+                    align = 'C' if col == "Quantity" else 'L'
+                    self.cell(col_widths[i], line_height * 2, str(col), border=1, align=align, fill=True)
                 self.ln()
             # ------------------------------------------------
 
@@ -126,7 +129,8 @@ class RoutePDF(FPDF):
                 self.set_x(x_start)
                 for i, lines in enumerate(cell_lines):
                     text = lines[line_no] if line_no < len(lines) else ""
-                    self.cell(col_widths[i], line_height, text, border=0)
+                    align = 'C' if columns[i] == "Quantity" else 'L'
+                    self.cell(col_widths[i], line_height, text, border=0, align=align)
                 self.ln(line_height)
 
 
@@ -184,6 +188,13 @@ def save_to_excel(grouped_data, output_path):
         for route, group in grouped_data:
             safe_name = str(route)[:31]
             group.to_excel(writer, sheet_name=safe_name, index=False)
+            sheet = writer.sheets[safe_name]
+            for idx, cell in enumerate(sheet[1], start=1):
+                if cell.value == "Quantity":
+                    for row in sheet.iter_rows(min_col=idx, max_col=idx, min_row=2, max_row=sheet.max_row):
+                        for c in row:
+                            c.alignment = Alignment(horizontal="center")
+                    break
 
 def print_via_pdf(grouped_data, listetype="Brødliste", dato="ukjent dato"):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:

@@ -137,9 +137,11 @@ class RoutePDF(FPDF):
 def format_and_sort_excel(file_path, listetype=None):
     try:
         df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
-        # Sorter først på kunde, deretter avdeling (dersom kolonnen finnes),
-        # etterfulgt av ruteinformasjon for å bevare eksisterende logikk
-        sort_keys = ["Customer", "Department", "Route ordering", "Route nickname"]
+        # Standard sortering: kunde -> avdeling -> rute
+        if listetype in ["Bamaliste Plukk", "Fryseliste Plukk"]:
+            sort_keys = ["Route ordering", "Route nickname", "Customer", "Department"]
+        else:
+            sort_keys = ["Customer", "Department", "Route ordering", "Route nickname"]
         active_keys = [key for key in sort_keys if key in df.columns]
         df_sorted = df.sort_values(by=active_keys, ascending=True)
         if "Route ordering" in df_sorted.columns:

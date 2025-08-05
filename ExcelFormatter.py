@@ -137,7 +137,11 @@ class RoutePDF(FPDF):
 def format_and_sort_excel(file_path, listetype=None):
     try:
         df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
-        df_sorted = df.sort_values(by=["Customer", "Route ordering", "Route nickname"], ascending=True)
+        # Sørg for at rader fra samme rute holdes sammen ved å sortere på rute først
+        # og deretter på kunde og avdeling innenfor hver rute
+        sort_keys = ["Route ordering", "Route nickname", "Customer", "Department"]
+        active_keys = [key for key in sort_keys if key in df.columns]
+        df_sorted = df.sort_values(by=active_keys, ascending=True)
         if "Route ordering" in df_sorted.columns:
             df_sorted = df_sorted.drop(columns=["Route ordering"])
         columns_to_keep = [
@@ -218,6 +222,11 @@ def main():
     # --- Nå lager vi det ENESTE hovedvinduet for programmet ---
     gui = tk.Tk()
     gui.title("Excel Formatter - Velg handling")
+    # Sørg for at vinduet dukker opp i forgrunnen
+    gui.lift()
+    gui.attributes('-topmost', True)
+    gui.after(0, lambda: gui.attributes('-topmost', False))
+    gui.focus_force()
     
     # Opprett variabelen ETTER at hovedvinduet er laget
     listetype = tk.StringVar(value="Brødliste")

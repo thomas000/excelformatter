@@ -130,15 +130,26 @@ class RoutePDF(FPDF):
                 self.ln(line_height)
 
 
-def format_and_sort_excel(file_path):
+def format_and_sort_excel(file_path, listetype=None):
     try:
         df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
         df_sorted = df.sort_values(by=["Customer", "Route ordering", "Route nickname"], ascending=True)
         if "Route ordering" in df_sorted.columns:
             df_sorted = df_sorted.drop(columns=["Route ordering"])
-        columns_to_keep = ["Order ID", "Quantity", "Product Name", "Supplier", "Customer", "Department", "Route nickname", "Accept alternatives"]
+        columns_to_keep = [
+            "Order ID",
+            "Quantity",
+            "Product Name",
+            "Supplier",
+            "Customer",
+            "Department",
+            "Route nickname",
+            "Accept alternatives",
+        ]
+        if listetype == "Bamaliste Plukk" and "Supplier" in columns_to_keep:
+            columns_to_keep.remove("Supplier")
         df_sorted = df_sorted[[col for col in columns_to_keep if col in df_sorted.columns]]
-        
+
         # Endre kolonnenavn for bedre PDF-layout
         df_sorted = df_sorted.rename(columns={"Accept alternatives": "AA"})
         df_sorted = df_sorted.rename(columns={"Route nickname": "Route"})
@@ -234,14 +245,13 @@ def main():
     # Siden de allerede er definert her, er det i orden.
     
     def on_print():
-        df_sorted = format_and_sort_excel(file_path)
+        lt = listetype.get()
+        df_sorted = format_and_sort_excel(file_path, lt)
         if df_sorted is None or df_sorted.empty:
             return
         if "Route" not in df_sorted.columns:
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
-
-        lt = listetype.get()
         if lt in ["Brødliste", "Fryseliste"]:
             grouped = df_sorted.groupby("Route")
             print_via_pdf(grouped, lt, date_part)
@@ -256,14 +266,13 @@ def main():
         output_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF files", "*.pdf")])
         if not output_path:
             return
-        df_sorted = format_and_sort_excel(file_path)
+        lt = listetype.get()
+        df_sorted = format_and_sort_excel(file_path, lt)
         if df_sorted is None or df_sorted.empty:
             return
         if "Route" not in df_sorted.columns:
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
-
-        lt = listetype.get()
         if lt in ["Brødliste", "Fryseliste"]:
             grouped = df_sorted.groupby("Route")
             save_to_pdf(grouped, output_path, lt, date_part)
@@ -278,14 +287,13 @@ def main():
         output_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])
         if not output_path:
             return
-        df_sorted = format_and_sort_excel(file_path)
+        lt = listetype.get()
+        df_sorted = format_and_sort_excel(file_path, lt)
         if df_sorted is None or df_sorted.empty:
             return
         if "Route" not in df_sorted.columns:
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
-
-        lt = listetype.get()
         if lt in ["Brødliste", "Fryseliste"]:
             grouped = df_sorted.groupby("Route")
             save_to_excel(grouped, output_path)

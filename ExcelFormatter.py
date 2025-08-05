@@ -152,15 +152,13 @@ def save_to_pdf(grouped_data, output_path, listetype="Brødliste", dato="ukjent 
     # Sjekk listetype
     if listetype in ["Brødliste", "Fryseliste"]:
         grouped = grouped_data
-        pdf = None  # Flytt pdf-objekt inn i loopen hvis du vil ha én PDF per rute, ellers behold utenfor
+        pdf = RoutePDF(listetype=listetype, dato=dato)
+        pdf.set_auto_page_break(auto=True, margin=15)
         for route, group in grouped:
-            pdf = RoutePDF(listetype=listetype, dato=dato)
-            pdf.set_auto_page_break(auto=True, margin=15)
             pdf.route_title = f"{listetype} til {dato} - Route: {route}"
             pdf.add_page()
             pdf.add_route_table(group)
-            # Skriv til output_path (hvis du vil ha én fil per rute kan du bruke f"{route}_{output_path}")
-        pdf.output(output_path)  # Lag én samlet PDF med alle rutene (hvis du ønsker én PDF, behold denne)
+        pdf.output(output_path)
     else:
         # Plukk-lister: EN tabell med hele dataen, ikke grupper!
         pdf = RoutePDF(listetype=listetype, dato=dato)

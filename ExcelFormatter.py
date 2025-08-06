@@ -137,11 +137,14 @@ class RoutePDF(FPDF):
 def format_and_sort_excel(file_path, listetype=None):
     try:
         df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
-        # Sorter først på kunde, deretter avdeling (dersom kolonnen finnes),
-        # etterfulgt av ruteinformasjon for å bevare eksisterende logikk
-        sort_keys = ["Customer", "Department", "Route ordering", "Route nickname"]
+        
+        if listetype in ["Bamaliste Plukk", "Fryseliste Plukk"]:
+            sort_keys = ["Route nickname", "Customer", "Department"]
+        else:
+            sort_keys = ["Customer", "Department", "Route ordering", "Route nickname"]
         active_keys = [key for key in sort_keys if key in df.columns]
         df_sorted = df.sort_values(by=active_keys, ascending=True)
+        
         if "Route ordering" in df_sorted.columns:
             df_sorted = df_sorted.drop(columns=["Route ordering"])
         columns_to_keep = [
@@ -157,11 +160,8 @@ def format_and_sort_excel(file_path, listetype=None):
         if listetype == "Bamaliste Plukk" and "Supplier" in columns_to_keep:
             columns_to_keep.remove("Supplier")
         df_sorted = df_sorted[[col for col in columns_to_keep if col in df_sorted.columns]]
-
-        # Endre kolonnenavn for bedre PDF-layout
         df_sorted = df_sorted.rename(columns={"Accept alternatives": "AA"})
         df_sorted = df_sorted.rename(columns={"Route nickname": "Route"})
-
         return df_sorted
     except Exception as e:
         messagebox.showerror("Feil", f"Kunne ikke lese eller formatere Excel-fil: {str(e)}")

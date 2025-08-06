@@ -276,7 +276,8 @@ def main():
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
         if lt in ["Brødliste", "Fryseliste"]:
-            grouped = df_sorted.groupby("Route")
+            # Bevar den forhåndssorterte rute-rekkefølgen
+            grouped = df_sorted.groupby("Route", sort=False)
             print_via_pdf(grouped, lt, date_part)
         else:
             # Plukklister: samme sortering, men ingen gruppering
@@ -298,7 +299,8 @@ def main():
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
         if lt in ["Brødliste", "Fryseliste"]:
-            grouped = df_sorted.groupby("Route")
+            # Bevar den forhåndssorterte rute-rekkefølgen
+            grouped = df_sorted.groupby("Route", sort=False)
             save_to_pdf(grouped, output_path, lt, date_part)
         else:
             # Plukklister: samme sortering, men ingen gruppering
@@ -320,7 +322,8 @@ def main():
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
         if lt in ["Brødliste", "Fryseliste"]:
-            grouped = df_sorted.groupby("Route")
+            # Bevar den forhåndssorterte rute-rekkefølgen
+            grouped = df_sorted.groupby("Route", sort=False)
             save_to_excel(grouped, output_path)
         else:
             # Plukklister: samme sortering, men Excel inneholder alle ruter i én tabell

@@ -137,11 +137,14 @@ class RoutePDF(FPDF):
 def format_and_sort_excel(file_path, listetype=None):
     try:
         df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
-        # Sorter først på kunde, deretter avdeling (dersom kolonnen finnes),
-        # etterfulgt av ruteinformasjon for å bevare eksisterende logikk
+        # Alle lister sorteres likt: kunde, avdeling (dersom kolonnen finnes),
+        # deretter ruteorden og rutenavn. Plukklister skiller seg bare i at de
+        # senere ikke grupperes per rute.
         sort_keys = ["Customer", "Department", "Route ordering", "Route nickname"]
-        active_keys = [key for key in sort_keys if key in df.columns]
-        df_sorted = df.sort_values(by=active_keys, ascending=True)
+        df_sorted = df.sort_values(
+            by=[key for key in sort_keys if key in df.columns],
+            ascending=True,
+        )
         if "Route ordering" in df_sorted.columns:
             df_sorted = df_sorted.drop(columns=["Route ordering"])
         columns_to_keep = [
@@ -179,7 +182,7 @@ def save_to_pdf(grouped_data, output_path, listetype="Brødliste", dato="ukjent 
             pdf.add_route_table(group)
         pdf.output(output_path)
     else:
-        # Plukk-lister: EN tabell med hele dataen, ikke grupper!
+        # Plukklister: samme sortering, men alle ruter samles på én side
         pdf = RoutePDF(listetype=listetype, dato=dato)
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.route_title = f"{listetype} til {dato}"
@@ -276,6 +279,7 @@ def main():
             grouped = df_sorted.groupby("Route")
             print_via_pdf(grouped, lt, date_part)
         else:
+            # Plukklister: samme sortering, men ingen gruppering
             print_via_pdf(df_sorted, lt, date_part)
         messagebox.showinfo("Ferdig", "PDF generert og åpnet for utskrift.")
         gui.destroy()
@@ -297,6 +301,7 @@ def main():
             grouped = df_sorted.groupby("Route")
             save_to_pdf(grouped, output_path, lt, date_part)
         else:
+            # Plukklister: samme sortering, men ingen gruppering
             save_to_pdf(df_sorted, output_path, lt, date_part)
         messagebox.showinfo("Ferdig", f"PDF lagret:\n{output_path}")
         gui.destroy()
@@ -318,7 +323,7 @@ def main():
             grouped = df_sorted.groupby("Route")
             save_to_excel(grouped, output_path)
         else:
-            # Plukklister: Lag Excel av hele tabellen
+            # Plukklister: samme sortering, men Excel inneholder alle ruter i én tabell
             df_sorted.to_excel(output_path, index=False)
         messagebox.showinfo("Ferdig", f"Excel lagret:\n{output_path}")
         gui.destroy()

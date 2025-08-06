@@ -137,10 +137,10 @@ class RoutePDF(FPDF):
 def format_and_sort_excel(file_path, listetype=None):
     try:
         df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
-        # Alle lister sorteres likt: kunde, avdeling (dersom kolonnen finnes),
-        # deretter ruteorden og rutenavn. Plukklister skiller seg bare i at de
+        # Alle lister sorteres likt: ruteorden og rutenavn først,
+        # deretter kunde og avdeling. Plukklister skiller seg bare i at de
         # senere ikke grupperes per rute.
-        sort_keys = ["Customer", "Department", "Route ordering", "Route nickname"]
+        sort_keys = ["Route ordering", "Route nickname", "Customer", "Department"]
         df_sorted = df.sort_values(
             by=[key for key in sort_keys if key in df.columns],
             ascending=True,

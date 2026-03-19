@@ -5,7 +5,7 @@ a = Analysis(
     ['ExcelFormatter.py'],
     pathex=[],
     binaries=[],
-    datas=[('logo.gif', '.'), ('favicon.ico', '.')],
+    datas=[('DejaVuSans.ttf', '.'), ('logo.gif', '.'), ('favicon.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

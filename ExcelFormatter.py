@@ -29,8 +29,8 @@ def filter_excluded_suppliers(df: pd.DataFrame) -> pd.DataFrame:
     if "Supplier" not in df.columns:
         return df
 
-    s = df["Supplier"].fillna("").astype(str).str.strip().str.casefold()
-    mask_exclude = s.apply(lambda x: any(k in x for k in EXCLUDE_SUPPLIER_KEYWORDS))
+    supplier_names = df["Supplier"].fillna("").astype(str).str.strip().str.casefold()
+    mask_exclude = supplier_names.apply(lambda x: any(k in x for k in EXCLUDE_SUPPLIER_KEYWORDS))
     return df.loc[~mask_exclude].copy()
 
 def resource_path(relative_path):
@@ -74,7 +74,7 @@ class RoutePDF(FPDF):
         df = df.fillna("")
         
         # Skjul Route-kolonnen der ruten allerede vises i tittelen
-        if getattr(self, "listetype", "") in ("Brødliste", "Fryseliste", "Plukkliste"):
+        if self.listetype in ("Brødliste", "Fryseliste", "Plukkliste"):
             for col in ("Route", "Route nickname"):
                 if col in df.columns:
                     df = df.drop(columns=[col])
@@ -86,7 +86,7 @@ class RoutePDF(FPDF):
         line_height = 4
 
         # --- Dynamisk kolonnebredde (beregnet per gruppe/rute) ---
-        MM_PER_CHAR = 1.65   # DejaVu Sans 9pt, målt med PIL
+        MM_PER_CHAR = 1.75   # DejaVu Sans 9pt — litt over snitt for å unngå overflow med norske tegn
         PADDING = 3.0
         FIXED_COLS = {"Order ID", "Quantity", "Missing", "AA"}
         WRAPPABLE = {"Product Name", "Customer", "Department",
@@ -115,7 +115,7 @@ class RoutePDF(FPDF):
         # 3. Fordel remaining proporsjonalt, klemt mellom [min_w, natural_cap]
         wrap_weights = {
             "Product Name":   3.5,
-            "Customer":       5.5,
+            "Customer":       6.5,
             "Department":     1.0,
             "Position":       1.8,
             "Supplier":       1.5,
@@ -206,9 +206,7 @@ class RoutePDF(FPDF):
         # Header bakgrunnsfarge
         if self.listetype == "Brødliste":
             self.set_fill_color(245, 222, 179)
-        elif self.listetype == "Fryseliste":
-            self.set_fill_color(173, 216, 230)
-        elif self.listetype in ["Fryseliste Plukk"]:
+        elif self.listetype in ("Fryseliste", "Fryseliste Plukk"):
             self.set_fill_color(173, 216, 230)
         elif self.listetype == "Bamaliste Plukk":
             self.set_fill_color(186, 255, 201)
@@ -236,7 +234,7 @@ class RoutePDF(FPDF):
                 column_name = columns[i]
                 if column_name in WRAPPABLE:
                     # Bryt kun når teksten faktisk ikke får plass (1.65mm/tegn målt)
-                    wrap_width = max(int(col_widths[i] / MM_PER_CHAR), 6)
+                    wrap_width = max(round(col_widths[i] / MM_PER_CHAR), 6)
                     lines = textwrap.wrap(text, width=wrap_width)
                     if not lines:
                         lines = [""]
@@ -262,7 +260,7 @@ class RoutePDF(FPDF):
             y_start = self.get_y()
 
             # --- Kristiansand: ev. bakgrunnsfarge for hele raden ---
-            if getattr(self, "krs_mode", False):
+            if self.krs_mode:
                 # Finn relevante verdier i denne raden
                 colmap = {columns[i]: (cell_lines[i][0] if cell_lines[i] else "") for i in range(len(columns))}
                 product_val = str(colmap.get("Product Name", "")).casefold()
@@ -272,7 +270,7 @@ class RoutePDF(FPDF):
                 fill_rgb = None
                 if "barnehage" in product_val:
                     fill_rgb = (255, 230, 230)   # svak rødfarge
-                elif supplier_val == "geheb" or "geheb" in supplier_val:
+                elif "geheb" in supplier_val:
                     fill_rgb = (230, 240, 255)   # svak blåfarge
 
                 if fill_rgb:
@@ -298,19 +296,19 @@ class RoutePDF(FPDF):
                 self.ln(line_height)
                 
     def add_route_summary(self, df):
-    #Viser et sammendrag per rute: sum Quantity per Product Name.
-    #Skrives under rute-tabellen. Hopper til ny side ved behov.
-    
+        """Viser et sammendrag per rute: sum Quantity per Product Name.
+        Skrives under rute-tabellen. Hopper til ny side ved behov.
+        """
         if "Product Name" not in df.columns or "Quantity" not in df.columns:
             return  # ingenting å oppsummere
 
         # Sørg for numeriske antall
         qty = pd.to_numeric(df["Quantity"], errors="coerce").fillna(0)
-        tmp = df.copy()
-        tmp["__qty__"] = qty
+        df_with_qty = df.copy()
+        df_with_qty["__qty__"] = qty
 
         summary = (
-            tmp.groupby("Product Name", dropna=False)["__qty__"]
+            df_with_qty.groupby("Product Name", dropna=False)["__qty__"]
                 .sum()
                 .reset_index()
                 .sort_values("Product Name")
@@ -323,59 +321,52 @@ class RoutePDF(FPDF):
         # 75 % til navn, 25 % til antall
         name_w = page_width * 0.75
         qty_w  = page_width * 0.25
-        line_h = 5
-        fs_hdr = 10
-        fs_row = 9
+        line_height = 5
+        header_font_size = 10
+        row_font_size = 9
 
-        # Tittel
         title = "Sammendrag - antall per type"
-        if self.get_y() + line_h*2 > self.page_break_trigger:
+        if self.get_y() + line_height * 2 > self.page_break_trigger:
             self.add_page()
 
-        self.set_font("DejaVu", "B", fs_hdr)
+        self.set_font("DejaVu", "B", header_font_size)
         self.set_fill_color(235, 235, 235)
-        self.cell(name_w + qty_w, line_h + 1, title, border=1, new_x="LMARGIN", new_y="NEXT", fill=True, align='L')
+        self.cell(name_w + qty_w, line_height + 1, title, border=1, new_x="LMARGIN", new_y="NEXT", fill=True, align='L')
 
-        # Header for minitabell
-        if self.get_y() + line_h*2 > self.page_break_trigger:
+        if self.get_y() + line_height * 2 > self.page_break_trigger:
             self.add_page()
-            self.set_font("DejaVu", "B", fs_hdr)
+            self.set_font("DejaVu", "B", header_font_size)
             self.set_fill_color(235, 235, 235)
-            self.cell(name_w + qty_w, line_h + 1, title, border=1, new_x="LMARGIN", new_y="NEXT", fill=True, align='L')
+            self.cell(name_w + qty_w, line_height + 1, title, border=1, new_x="LMARGIN", new_y="NEXT", fill=True, align='L')
 
-        self.set_font("DejaVu", "B", fs_row)
+        self.set_font("DejaVu", "B", row_font_size)
         self.set_fill_color(245, 245, 245)
-        self.cell(name_w, line_h, "Product Name", border=1, fill=True)
-        self.cell(qty_w,  line_h, "Sum Quantity", border=1, new_x="LMARGIN", new_y="NEXT", align='C', fill=True)
+        self.cell(name_w, line_height, "Product Name", border=1, fill=True)
+        self.cell(qty_w,  line_height, "Sum Quantity", border=1, new_x="LMARGIN", new_y="NEXT", align='C', fill=True)
 
-        # Rader
-        self.set_font("DejaVu", "", fs_row)
-        for _, r in summary.iterrows():
-            if self.get_y() + line_h > self.page_break_trigger:
+        self.set_font("DejaVu", "", row_font_size)
+        for _, row in summary.iterrows():
+            if self.get_y() + line_height > self.page_break_trigger:
                 self.add_page()
-                self.set_font("DejaVu", "B", fs_hdr)
+                self.set_font("DejaVu", "B", header_font_size)
                 self.set_fill_color(235, 235, 235)
-                self.cell(name_w + qty_w, line_h + 1, title, border=1, new_x="LMARGIN", new_y="NEXT", fill=True, align='L')
-                self.set_font("DejaVu", "B", fs_row)
+                self.cell(name_w + qty_w, line_height + 1, title, border=1, new_x="LMARGIN", new_y="NEXT", fill=True, align='L')
+                self.set_font("DejaVu", "B", row_font_size)
                 self.set_fill_color(245, 245, 245)
-                self.cell(name_w, line_h, "Product Name", border=1, fill=True)
-                self.cell(qty_w,  line_h, "Sum Quantity", border=1, new_x="LMARGIN", new_y="NEXT", align='C', fill=True)
-                self.set_font("DejaVu", "", fs_row)
+                self.cell(name_w, line_height, "Product Name", border=1, fill=True)
+                self.cell(qty_w,  line_height, "Sum Quantity", border=1, new_x="LMARGIN", new_y="NEXT", align='C', fill=True)
+                self.set_font("DejaVu", "", row_font_size)
 
-            self.cell(name_w, line_h, str(r["Product Name"]), border=1)
-            self.cell(qty_w,  line_h, f'{int(r["__qty__"]):,}'.replace(',', ' '), border=1, new_x="LMARGIN", new_y="NEXT", align='C')
+            self.cell(name_w, line_height, str(row["Product Name"]), border=1)
+            self.cell(qty_w,  line_height, f'{int(row["__qty__"]):,}'.replace(',', ' '), border=1, new_x="LMARGIN", new_y="NEXT", align='C')
 
 
 def format_and_sort_excel(file_path, listetype=None):
     try:
         df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
 
-        # Filter for listetyper som skal ekskludere suppliers
         if listetype in ["Plukkliste", "Sammendragsliste Plukk"]:
             df = filter_excluded_suppliers(df)
-            
-        # Ekstra filter: fjern alle linjer der Storage er Freezer (-22)
-        if listetype in ["Plukkliste", "Sammendragsliste Plukk"]:
             if "Storage" in df.columns:
                 storage = df["Storage"].fillna("").astype(str).str.strip()
                 df = df[storage != "Freezer (-22)"].copy()
@@ -392,15 +383,9 @@ def format_and_sort_excel(file_path, listetype=None):
 
         # --- Sortering ---
         # Nå også plukklister: Route nickname -> Route ordering (numerisk) -> Customer -> Department
-        if listetype in ["Bamaliste Plukk", "Fryseliste Plukk", "Gehebliste Plukk"]:
-            sort_keys = ["Route nickname"]
-            sort_keys.append("__route_order__" if has_route_ord else "Route ordering")
-            sort_keys += ["Customer", "Department"]
-        else:
-            # Brødliste / Fryseliste (samme logikk – behold stopprekkefølgen)
-            sort_keys = ["Route nickname"]
-            sort_keys.append("__route_order__" if has_route_ord else "Route ordering")
-            sort_keys += ["Customer", "Department"]
+        sort_keys = ["Route nickname"]
+        sort_keys.append("__route_order__" if has_route_ord else "Route ordering")
+        sort_keys += ["Customer", "Department"]
 
         active_keys = [k for k in sort_keys if k in df.columns]
         df_sorted = df.sort_values(by=active_keys, ascending=True, na_position="last")
@@ -457,16 +442,13 @@ def format_and_sort_excel(file_path, listetype=None):
 
 
 def save_to_pdf(grouped_data, output_path, listetype="Brødliste", dato="ukjent dato", krs_mode=False):
-    if listetype == ("Sammendragsliste Brød", "Sammendragsliste Plukk"):
+    if listetype in ("Sammendragsliste Brød", "Sammendragsliste Plukk"):
         # grouped_data er en DataFrame (df_sorted)
         df_all = grouped_data.fillna("")
         pdf = RoutePDF(listetype=listetype, dato=dato, krs_mode=krs_mode)
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.route_title = f"{listetype} til {dato}"
         pdf.add_page()
-
-        # En liten nøytral headerfarge (valgfritt)
-        # pdf.set_fill_color(220, 220, 220)
 
         # Skriv sammendrag for hver rute etter hverandre
         for route, group in df_all.groupby("Route"):
@@ -479,12 +461,11 @@ def save_to_pdf(grouped_data, output_path, listetype="Brødliste", dato="ukjent 
 
         pdf.output(output_path)
         return
-    # Sjekk listetype
+
     if listetype in ["Brødliste", "Fryseliste", "Plukkliste"]:
-        grouped = grouped_data
         pdf = RoutePDF(listetype=listetype, dato=dato, krs_mode=krs_mode)
         pdf.set_auto_page_break(auto=True, margin=15)
-        for route, group in grouped:
+        for route, group in grouped_data:
             pdf.route_title = f"{listetype} til {dato} - Route: {route}"
             pdf.add_page()
             pdf.add_route_table(group)
@@ -541,9 +522,6 @@ def main():
     gui.after(0, lambda: gui.attributes('-topmost', False))
     gui.focus_force()
     
-    # Opprett variabelen ETTER at hovedvinduet er laget
-    listetype = tk.StringVar(value="Brødliste")
-
     # Prøv å finne dato fra filnavnet
     base_name = os.path.basename(file_path)
     match = re.search(r"\d{4}-\d{2}-\d{2}", base_name)
@@ -558,12 +536,9 @@ def main():
     label_type = tk.Label(frame_type, text="Velg listetype:")
     label_type.pack(side=tk.LEFT)
     
-    # Kristiansand-modus (farge-regler + regnbuebanner)
     krs_var = tk.BooleanVar(value=False)
 
-    # Regnbuebanner (skjules/vises)
     banner_frame = tk.Frame(gui)
-    # Bygg smale striper (regnbue)
     rainbow = ["#FF0000", "#FF7F00", "#FFFF00", "#00FF00", "#0000FF", "#4B0082", "#8B00FF"]
     for c in rainbow:
         stripe = tk.Frame(banner_frame, bg=c, height=6)
@@ -576,15 +551,12 @@ def main():
         else:
             banner_frame.pack_forget()
 
-    # Toggle-funksjon koblet til checkbutton
     def on_toggle_krs():
         apply_krs_theme(krs_var.get())
 
-    # Knapp for å skru av/på Kristiansand-modus
     krs_btn = tk.Checkbutton(gui, text="Kristiansand", variable=krs_var, command=on_toggle_krs)
     krs_btn.pack(pady=(0, 6))
 
-    # Disse vil nå fungere korrekt da de tilhører 'gui' og 'listetype'
     listetyper = ["Brødliste", "Fryseliste", "Plukkliste", "Sammendragsliste Plukk", "Sammendragsliste Brød", "Fryseliste Plukk", "Bamaliste Plukk", "Gehebliste Plukk"]
     listetype = tk.StringVar(value=listetyper[0])
     dropdown = tk.OptionMenu(frame_type, listetype, *listetyper)
@@ -606,14 +578,10 @@ def main():
         if lt in ["Brødliste", "Fryseliste", "Plukkliste"]:
             grouped = df_sorted.groupby("Route")
             print_via_pdf(grouped, lt, date_part, krs_mode=krs_var.get())
-        elif lt == "Sammendragsliste Brød":
-            print_via_pdf(df_sorted, lt, date_part, krs_mode=krs_var.get())
         else:
             print_via_pdf(df_sorted, lt, date_part, krs_mode=krs_var.get())
         messagebox.showinfo("Ferdig", "PDF generert og åpnet for utskrift.")
         gui.destroy()
-
-
 
     def on_pdf():
         output_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF files", "*.pdf")])
@@ -626,17 +594,13 @@ def main():
         if "Route" not in df_sorted.columns:
             messagebox.showerror("Feil", "Filen mangler kolonnen 'Route'.")
             return
-        if lt in ["Brødliste", "Fryseliste"]:
+        if lt in ["Brødliste", "Fryseliste", "Plukkliste"]:
             grouped = df_sorted.groupby("Route")
             save_to_pdf(grouped, output_path, lt, date_part, krs_mode=krs_var.get())
-        elif lt == "Sammendragsliste Brød":
-            save_to_pdf(df_sorted, output_path, lt, date_part, krs_mode=krs_var.get())    
         else:
             save_to_pdf(df_sorted, output_path, lt, date_part, krs_mode=krs_var.get())
         messagebox.showinfo("Ferdig", f"PDF lagret:\n{output_path}")
         gui.destroy()
-
-
 
     def on_excel():
         output_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")])

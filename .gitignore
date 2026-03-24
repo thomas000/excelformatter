@@ -68,3 +68,6 @@ logo.gif
 
 # Log files
 *.log
+
+# Claude Code
+.claude/

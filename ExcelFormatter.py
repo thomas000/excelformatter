@@ -435,6 +435,12 @@ def format_and_sort_excel(file_path, listetype=None):
             "Route nickname": "Route",
         })
 
+        # Kunder uten rute skal ikke forsvinne i groupby - gi dem en egen gruppe
+        # (gjøres etter sortering, så de fortsatt havner sist)
+        if "Route" in df_sorted.columns:
+            route = df_sorted["Route"].fillna("").astype(str).str.strip()
+            df_sorted["Route"] = route.mask(route == "", "Uten rute")
+
         return df_sorted
     except Exception as e:
         messagebox.showerror("Feil", f"Kunne ikke lese eller formatere Excel-fil: {str(e)}")

@@ -22,6 +22,11 @@ EXCLUDE_SUPPLIER_KEYWORDS = [
     "baker klausen",
 ]
 
+# Lagerposisjoner som ikke skal med på plukklistene (eksakt match, case-insensitiv)
+EXCLUDE_POSITIONS = [
+    "y-banan",  # bananer - plukkes ikke her uansett leverandør
+]
+
 def filter_excluded_suppliers(df: pd.DataFrame) -> pd.DataFrame:
     """Fjerner rader med suppliers vi ikke vil ha med (case-insensitiv substring match)."""
     if df is None or df.empty:
@@ -370,6 +375,9 @@ def format_and_sort_excel(file_path, listetype=None):
             if "Storage" in df.columns:
                 storage = df["Storage"].fillna("").astype(str).str.strip()
                 df = df[storage != "Freezer (-22)"].copy()
+            if "Position" in df.columns:
+                position = df["Position"].fillna("").astype(str).str.strip().str.casefold()
+                df = df[~position.isin(EXCLUDE_POSITIONS)].copy()
 
         # Plukkliste: fjern ordrelinjer til kunden "TRY AS"
         if listetype == "Plukkliste":
